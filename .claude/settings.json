@@ -6,7 +6,10 @@
       "Bash(cargo test *)",
       "Bash(xxd README.md)",
       "Bash(git rm *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --base main --head 1-crate-scaffolding --title '#1 — Crate scaffolding and public scalar types' --body ' *)"
     ]
   }
 }
