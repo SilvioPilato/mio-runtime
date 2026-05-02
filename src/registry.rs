@@ -1,14 +1,14 @@
-use crate::{TimeWheel, TimerId, Token};
+use crate::{TimerId, Token, timerwheel::TimerWheel};
 use mio::{Interest, event::Source};
 use std::{cell::RefCell, io, time::Duration};
 
 pub struct Registry<'a> {
     inner: &'a mio::Registry,
-    wheel: RefCell<&'a mut TimeWheel>,
+    wheel: RefCell<&'a mut TimerWheel>,
 }
 
 impl<'a> Registry<'a> {
-    pub fn new(inner: &'a mio::Registry, wheel: &'a mut TimeWheel) -> Registry<'a> {
+    pub fn new(inner: &'a mio::Registry, wheel: &'a mut TimerWheel) -> Registry<'a> {
         Registry {
             inner,
             wheel: RefCell::new(wheel),
