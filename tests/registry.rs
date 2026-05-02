@@ -1,12 +1,15 @@
 use std::time::Duration;
 
 use mio::{Interest, net::TcpListener};
-use mio_runtime::{Registry, TimeWheel, Token};
+use mio_runtime::{Registry, TimerWheel, Token};
 
 const SLOTS: usize = 512;
 
-fn setup() -> (mio::Poll, TimeWheel) {
-    (mio::Poll::new().unwrap(), TimeWheel::new(SLOTS))
+fn setup() -> (mio::Poll, TimerWheel) {
+    (
+        mio::Poll::new().unwrap(),
+        TimerWheel::new(Duration::from_millis(SLOTS as u64)),
+    )
 }
 
 // --- I/O forwarding ---
@@ -16,9 +19,11 @@ fn register_tcp_listener_succeeds() {
     let (poll, mut wheel) = setup();
     let registry = Registry::new(poll.registry(), &mut wheel);
     let mut listener = TcpListener::bind("127.0.0.1:0".parse().unwrap()).unwrap();
-    assert!(registry
-        .register(&mut listener, Token(0), Interest::READABLE)
-        .is_ok());
+    assert!(
+        registry
+            .register(&mut listener, Token(0), Interest::READABLE)
+            .is_ok()
+    );
 }
 
 #[test]
@@ -29,9 +34,15 @@ fn reregister_changes_interest() {
     registry
         .register(&mut listener, Token(0), Interest::READABLE)
         .unwrap();
-    assert!(registry
-        .reregister(&mut listener, Token(0), Interest::READABLE | Interest::WRITABLE)
-        .is_ok());
+    assert!(
+        registry
+            .reregister(
+                &mut listener,
+                Token(0),
+                Interest::READABLE | Interest::WRITABLE
+            )
+            .is_ok()
+    );
 }
 
 #[test]

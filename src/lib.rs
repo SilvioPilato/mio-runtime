@@ -1,9 +1,14 @@
 //! mio-runtime — a single-threaded, callback-based I/O event loop built on `mio`.
 
+mod event_loop;
+mod handler;
 mod registry;
-mod timewheel;
+mod timerwheel;
 mod types;
 
+pub use event_loop::{EventLoop, Waker};
+pub use handler::EventHandler;
 pub use registry::Registry;
-pub use timewheel::TimeWheel;
+#[doc(hidden)]
+pub use timerwheel::TimerWheel;
 pub use types::{ReadyState, TimerId, Token};

@@ -5,7 +5,7 @@ use std::{
 
 use crate::TimerId;
 
-pub struct TimeWheel {
+pub struct TimerWheel {
     wheel: Vec<Vec<TimerId>>,
     deleted: HashSet<TimerId>,
     cursor: u64,
@@ -13,10 +13,12 @@ pub struct TimeWheel {
     last_instant: Instant,
 }
 
-impl TimeWheel {
-    pub fn new(slots: usize) -> Self {
-        TimeWheel {
-            wheel: vec![vec![]; slots],
+impl TimerWheel {
+    pub fn new(capacity: Duration) -> Self {
+        let slots = capacity.as_millis();
+        debug_assert!(slots <= usize::MAX as u128, "capacity overflows usize");
+        TimerWheel {
+            wheel: vec![vec![]; slots as usize],
             cursor: 0,
             next_id: 0,
             deleted: HashSet::new(),
