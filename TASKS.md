@@ -24,7 +24,7 @@ ADR-001 deliberately bounded the timer wheel at 512 slots × 1 ms around the lar
 
 Define `Registry` as a thin wrapper around `mio::Registry` paired with a shared handle to the timer wheel from #2, exposing exactly the surface specified in ADR-001 — `register`, `reregister`, `deregister`, `insert_timer`, `cancel_timer` — and nothing more. The I/O methods are generic over `S: mio::event::Source` so the runtime stays decoupled from any particular I/O type, which is the constraint that lets the same runtime serve both rustikv (TCP) and raft-rs (TCP, possibly Unix sockets) without growing TCP-specific code paths. `Registry` must not be `Clone` and must not be `Send`: it is constructed internally by `EventLoop`, handed to callbacks by reference for the duration of a single dispatch, and never owned by the consumer — the type system enforces ADR-001's contract that consumers cannot smuggle a `Registry` out of a callback. Because the same `&Registry` is used to both schedule and cancel timers during a callback, the embedded timer-wheel handle must support interior mutability — wrapping the wheel in a `RefCell` (or equivalent single-threaded cell) is the natural shape and is consistent with the single-threaded design that ADR-001 commits to. Test in isolation by constructing a `Registry` from a real `mio::Poll` plus a stub timer wheel, registering a cross-platform `mio::event::Source` (e.g. `mio::net::TcpListener` bound to port 0), and asserting register/reregister/deregister forward correctly to the underlying `mio::Registry`, and that `insert_timer`/`cancel_timer` round-trip against the embedded wheel. Depends on #1 and #2.
 
-PR: TBD
+PR: https://github.com/SilvioPilato/mio-runtime/pull/3
 
 ## #1 — Crate scaffolding and public scalar types
 
