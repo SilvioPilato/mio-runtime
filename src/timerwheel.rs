@@ -65,6 +65,10 @@ impl TimerWheel {
         res
     }
 
+    pub fn capacity(&self) -> Duration {
+        Duration::from_millis(self.wheel.len() as u64)
+    }
+
     pub fn next_deadline(&self) -> Option<Duration> {
         for offset in 0..self.wheel.len() {
             let index = (self.cursor as usize + offset) % self.wheel.len();

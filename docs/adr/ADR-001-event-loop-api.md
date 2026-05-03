@@ -142,41 +142,64 @@ to detect external notifications.
 
 ### 4. Loop lifecycle — stop
 
-**Decision**: `stop()` is exposed only on `EventLoop`, not on `Registry`.
+**Decision**: Two complementary stop mechanisms are provided: `EventLoop::stop`
+for the owner, and `StopHandle` for callbacks and external threads.
 
 ```rust
 impl EventLoop {
     pub fn stop(&mut self);
+    pub fn stop_handle(&self) -> StopHandle;
+}
+
+#[derive(Clone)]
+pub struct StopHandle { /* wraps Arc<AtomicBool> */ }
+
+impl StopHandle {
+    pub fn stop(&self);
 }
 ```
 
-Centralizing stop control in the owner of the loop follows the principle of
-least authority: only the component that constructed and runs the loop can
-terminate it. Handler callbacks cannot stop the loop directly.
+**`EventLoop::stop`** keeps stop control in the loop owner for cases where the
+owner calls it from outside `run()` — for example from a separate thread that
+holds `EventLoop`, or in test teardown.
 
-If a handler needs to signal shutdown, it does so through shared state
-(e.g. an `AtomicBool`) that the owner observes and acts on by calling
-`event_loop.stop()`.
+**`StopHandle`** addresses a gap that emerges in the single-threaded model:
+`run(&mut self)` holds an exclusive borrow on `EventLoop` for its entire
+duration, so the owner cannot call `stop(&mut self)` while the loop is running
+on the same thread. Any callback that needs to signal shutdown has no path to
+`EventLoop` — it only receives `&Registry`. `StopHandle` fills this gap. It is
+a `Clone + Send` handle backed by the same `Arc<AtomicBool>` that `run()` checks
+at each iteration boundary. The handler stores a clone obtained before calling
+`run()`, calls `stop_handle.stop()` at the right moment, and the loop exits
+cleanly after the current iteration completes.
 
-This design is consistent with how mature runtimes handle shutdown:
-- **tokio**: `Runtime::shutdown_timeout()` on the owner only
-- **Netty**: `EventLoopGroup.shutdownGracefully()` on the owner only
-- **mio**: no stop concept — the caller controls the loop
+This is consistent with how other single-threaded event loops solve the same
+problem:
 
-**Extension path**: adding `stop()` to `Registry` later is a non-breaking
-additive change (one method, same internal `AtomicBool`). The reverse —
-removing it — would be a breaking change. Starting minimal is therefore the
-lower-risk choice.
+- **calloop**: exposes `LoopSignal`, a `Clone + Send` stop handle obtained via
+  `EventLoop::get_signal()` — the direct precedent for `StopHandle`
+- **libuv**: `uv_stop(loop)` takes the loop pointer and is callable from any
+  callback — same intent, C idiom
+- **tokio / Netty**: owner-only stop works there because these are
+  multi-threaded runtimes where the owner genuinely runs on a separate thread
+  from the workers
+
+The stop flag is `Arc<AtomicBool>` shared between `EventLoop` and all
+`StopHandle` clones. `Relaxed` ordering is sufficient: the flag is read only at
+iteration boundaries on a single thread, and the callback's return establishes
+the happens-before relationship before the check.
 
 **Alternatives considered**:
 
+- **Owner-only stop** (original design): clean in theory, unworkable in the
+  single-threaded model — the owner is blocked inside `run()` and cannot act on
+  shared state until something else stops the loop first, creating a
+  bootstrapping problem.
 - **`stop()` on `Registry`**: any callback can stop the loop, including
-  unexpectedly. Distributed control makes shutdown behavior harder to reason
-  about under load.
-- **`ControlFlow` enum parameter on callbacks** (calloop pattern): callbacks
-  return or mutate a `ControlFlow` value to signal stop. More explicit than
-  shared state, but adds a parameter to every callback signature and couples
-  the stop mechanism to the callback protocol.
+  unexpectedly. Distributed control makes shutdown harder to audit.
+- **`ControlFlow` enum on callbacks** (winit pattern): callbacks return
+  `Continue` or `Exit`. Explicit, but adds a return value to every callback
+  method and couples the stop mechanism to the callback protocol.
 
 ---
 
@@ -221,13 +244,23 @@ impl Registry {
     pub fn cancel_timer(&self, id: TimerId);
 }
 
+// --- stop handle (Clone + Send; obtained from EventLoop::stop_handle) ---
+
+#[derive(Clone)]
+pub struct StopHandle { /* wraps Arc<AtomicBool> */ }
+
+impl StopHandle {
+    pub fn stop(&self);
+}
+
 // --- event loop (owned by caller) ---
 
-pub struct EventLoop { /* Poll + TimerWheel + running flag */ }
+pub struct EventLoop { /* Poll + TimerWheel + Arc<AtomicBool> running flag */ }
 
 impl EventLoop {
-    pub fn new() -> io::Result<Self>;
+    pub fn new(capacity: Duration) -> io::Result<Self>;
     pub fn waker(&self) -> Waker;
+    pub fn stop_handle(&self) -> StopHandle;
     pub fn run(&mut self, handler: &mut dyn EventHandler) -> io::Result<()>;
     pub fn stop(&mut self);
 }

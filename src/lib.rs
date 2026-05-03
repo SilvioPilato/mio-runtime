@@ -6,7 +6,7 @@ mod registry;
 mod timerwheel;
 mod types;
 
-pub use event_loop::{EventLoop, Waker};
+pub use event_loop::{EventLoop, StopHandle, Waker};
 pub use handler::EventHandler;
 pub use registry::Registry;
 #[doc(hidden)]
