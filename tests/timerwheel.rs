@@ -142,6 +142,45 @@ fn advance_fires_timer_at_its_slot() {
     assert_eq!(fired, vec![id]);
 }
 
+// A timer inserted with delay D must fire once the wheel has advanced by
+// exactly D ms — the boundary `elapsed == D` left untested by the cases above,
+// and the exact point where the next_deadline/advance off-by-one lived.
+#[test]
+fn advance_fires_timer_at_exactly_its_delay() {
+    let mut wheel = TimerWheel::new(Duration::from_millis(SLOTS as u64));
+    let t = Instant::now();
+    let id = wheel.insert(Duration::from_millis(5));
+    let fired = wheel.advance(t + Duration::from_millis(5));
+    assert_eq!(fired, vec![id]);
+}
+
+// A delay-0 ("due now") timer must fire on the next advance even when no time
+// has elapsed, otherwise the dispatch loop busy-spins (next_deadline returns 0,
+// poll returns immediately, advance fires nothing).
+#[test]
+fn advance_fires_delay_zero_timer_with_no_elapsed_time() {
+    let mut wheel = TimerWheel::new(Duration::from_millis(SLOTS as u64));
+    let t = Instant::now();
+    let id = wheel.insert(Duration::from_millis(0));
+    let fired = wheel.advance(t);
+    assert_eq!(fired, vec![id]);
+}
+
+// Re-arming a timer with the same delay from the moved cursor keeps it firing
+// on schedule — guards the boundary semantics across cursor advances.
+#[test]
+fn rearmed_timer_fires_on_schedule_from_moved_cursor() {
+    let mut wheel = TimerWheel::new(Duration::from_millis(SLOTS as u64));
+    let t = Instant::now();
+
+    let first = wheel.insert(Duration::from_millis(5));
+    assert_eq!(wheel.advance(t + Duration::from_millis(5)), vec![first]);
+
+    // Cursor is now at 5 ms; arm another 5 ms timer and advance another 5 ms.
+    let second = wheel.insert(Duration::from_millis(5));
+    assert_eq!(wheel.advance(t + Duration::from_millis(10)), vec![second]);
+}
+
 // --- advance: cursor wraparound ---
 
 #[test]
