@@ -181,6 +181,21 @@ fn rearmed_timer_fires_on_schedule_from_moved_cursor() {
     assert_eq!(wheel.advance(t + Duration::from_millis(10)), vec![second]);
 }
 
+// A timer fired on one advance must not fire again when a later advance crosses
+// its (now-drained) slot. Guards the consecutive-call boundary overlap that the
+// inclusive sweep introduces — distinct from the wraparound overlap covered by
+// `multi_revolution_advance_does_not_double_fire`.
+#[test]
+fn advance_past_a_fired_slot_does_not_refire() {
+    let mut wheel = TimerWheel::new(Duration::from_millis(SLOTS as u64));
+    let t = Instant::now();
+    let id = wheel.insert(Duration::from_millis(5));
+    // First advance lands exactly on slot 5, firing the timer.
+    assert_eq!(wheel.advance(t + Duration::from_millis(5)), vec![id]);
+    // Second advance crosses slot 5 again; it has been drained, so nothing fires.
+    assert!(wheel.advance(t + Duration::from_millis(10)).is_empty());
+}
+
 // --- advance: cursor wraparound ---
 
 #[test]
