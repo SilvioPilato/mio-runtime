@@ -50,7 +50,12 @@ impl TimerWheel {
             .as_millis()
             .min(self.wheel.len() as u128) as u64;
         let mut res = vec![];
-        for c in self.cursor..(self.cursor + elapsed) {
+        // Inclusive of the landing slot: a timer at offset `D` (delay `D`) must
+        // fire once `elapsed >= D`, matching `insert`/`next_deadline`. The slot
+        // shared with the next sweep (and on wraparound) is already drained, so
+        // the inclusive endpoint cannot double-fire; `cursor` still moves by
+        // exactly `elapsed`, so there is no drift.
+        for c in self.cursor..=(self.cursor + elapsed) {
             let index = c as usize % self.wheel.len();
             for id in self.wheel[index].drain(..) {
                 if self.deleted.remove(&id) {
