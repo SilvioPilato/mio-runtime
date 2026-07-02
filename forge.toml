@@ -1,0 +1,10 @@
+roots = ["decisions", "forces"]
+
+[dedup]
+reuse = 0.90  # cosine threshold: silently reuse existing force
+warn = 0.75   # cosine threshold: warn about near-duplicate
+
+[embedding]
+# "fake-bucket" is a deterministic test embedder. The real model below
+# downloads ~120MB from Hugging Face on first run, then uses the local cache.
+model = "intfloat/multilingual-e5-small"
